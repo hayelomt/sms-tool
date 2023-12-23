@@ -3,8 +3,10 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:sms_tool/core/core.dart';
 import 'package:sms_tool/core/ui/widgets/sms_progress_indicator.dart';
+import 'package:sms_tool/features/text_message/models/text_message.dart';
 import 'package:sms_tool/features/text_message/text_message_repo.dart';
 import 'package:sms_tool/features/text_message/text_message_sms_provider.dart';
+import 'package:sms_tool/features/text_message/widgets/custom_selectable_tag.dart';
 import 'package:sms_tool/features/text_message/widgets/text_message_list.dart';
 
 // TODO: Refacor shared code
@@ -16,12 +18,36 @@ class MessagesTab extends HookConsumerWidget {
     final textSelections = useState<Set<String>>({});
     final msgCollapsed = useState(true);
     final ctxTheme = Theme.of(context);
-    final textMessages = ref.watch(textMessagesRepoProvider);
+    final storeTextMessages = ref.watch(textMessagesRepoProvider);
+    final msgsData = storeTextMessages.asData?.value ?? [];
+    final tags = useMemoized(
+        () => Set<String>.from(
+            msgsData.expand<String>((i) => (i.msgTags ?? [])).toList()),
+        [msgsData]);
+
+    final selectedTags = useState<Set<String>>({});
+
+    final List<TextMessage> messages = useMemoized(
+        () => selectedTags.value.isEmpty
+            ? msgsData
+            : msgsData
+                .where((i) => (i.msgTags ?? [])
+                    .any((element) => selectedTags.value.contains(element)))
+                .toList(),
+        [selectedTags.value, msgsData]);
+
+    useEffect(() {
+      if (tags.isEmpty) {
+        selectedTags.value = {};
+      }
+
+      return null;
+    }, [tags]);
 
     final checkboxState = textSelections.value.isEmpty
         ? false
         : textSelections.value.length ==
-                (textMessages.asData?.value.length ?? -1)
+                (storeTextMessages.asData?.value.length ?? -1)
             ? true
             : null;
 
@@ -42,13 +68,12 @@ class MessagesTab extends HookConsumerWidget {
                       Checkbox(
                         value: checkboxState,
                         tristate: true,
-                        onChanged: (textMessages.asData?.value.isEmpty ?? true)
+                        onChanged: messages.isEmpty
                             ? null
                             : (_) {
                                 textSelections.value = switch (checkboxState) {
                                   false => Set<String>.from(
-                                      (textMessages.asData?.value ?? [])
-                                          .map((e) => e.id)),
+                                      (messages).map((e) => e.id)),
                                   _ => {},
                                 };
                               },
@@ -61,14 +86,14 @@ class MessagesTab extends HookConsumerWidget {
                           const Text('Select all'),
                           const SizedBox(width: 10),
                           Text(
-                              '[${textSelections.value.length}/${(textMessages.asData?.value ?? []).length} selected]',
+                              '[${textSelections.value.length}/${messages.length} selected]',
                               style: ctxTheme.textTheme.labelSmall)
                         ],
                       )
                     ],
                   ),
                   ElevatedButton.icon(
-                      onPressed: textMessages.isLoading
+                      onPressed: storeTextMessages.isLoading
                           ? null
                           : () async {
                               textSelections.value = {};
@@ -90,7 +115,7 @@ class MessagesTab extends HookConsumerWidget {
                                 ? null
                                 : () async {
                                     final selectedMessages =
-                                        (textMessages.asData?.value ?? [])
+                                        (storeTextMessages.asData?.value ?? [])
                                             .where((i) => textSelections.value
                                                 .contains(i.id))
                                             .toList();
@@ -172,6 +197,36 @@ class MessagesTab extends HookConsumerWidget {
                 ],
               ),
               const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                        bottom: BorderSide(
+                            color: selectedTags.value.isEmpty
+                                ? Colors.transparent
+                                : ctxTheme.colorScheme.primary,
+                            width: selectedTags.value.isEmpty ? 0 : 1)),
+                  ),
+                  child: Row(
+                    children: tags
+                        .map((tag) => CustomSelectableTag(
+                            label: tag,
+                            active: selectedTags.value.contains(tag),
+                            onTap: () {
+                              final curSelections =
+                                  Set<String>.from(selectedTags.value);
+                              curSelections.contains(tag)
+                                  ? curSelections.remove(tag)
+                                  : curSelections.add(tag);
+
+                              selectedTags.value = curSelections;
+                            }))
+                        .toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
               Expanded(
                   child: TextMessageMessageList(
                 textMessageSelections: textSelections.value,
@@ -185,6 +240,7 @@ class MessagesTab extends HookConsumerWidget {
                   textSelections.value = curState;
                 },
                 msgCollapsed: msgCollapsed.value,
+                messages: messages,
               )),
             ],
           ),

@@ -8,12 +8,14 @@ class TextMessageMessageList extends ConsumerWidget {
   final Set<String> textMessageSelections;
   final Function(String) onToggle;
   final bool msgCollapsed;
+  final List<TextMessage> messages;
 
   const TextMessageMessageList({
     super.key,
     required this.textMessageSelections,
     required this.onToggle,
     required this.msgCollapsed,
+    required this.messages,
   });
 
   @override
@@ -22,13 +24,13 @@ class TextMessageMessageList extends ConsumerWidget {
     debugPrint(textMessages.asData?.value.length.toString());
 
     return textMessages.when(
-        data: (data) => ListView.builder(
-              itemCount: data.length,
+        data: (_) => ListView.builder(
+              itemCount: messages.length,
               itemBuilder: (context, index) => TextMessageItem(
-                message: data[index],
+                message: messages[index],
                 textMessageSelections: textMessageSelections,
                 onToggle: onToggle,
-                isSelected: textMessageSelections.contains(data[index].id),
+                isSelected: textMessageSelections.contains(messages[index].id),
                 msgCollapsed: msgCollapsed,
               ),
             ),
